@@ -57,6 +57,7 @@ export default function Chat() {
     q?: string;
     answer?: string | { html?: string; answer?: string; flashcards?: FlashCard[]; topic?: string };
     flashcards?: FlashCard[];
+    categoryId?: string;
   };
 
   const initialChatId = search.get("chatId") || state.chatId || "";
@@ -159,14 +160,37 @@ export default function Chat() {
     ws.onmessage = (ev) => {
       try {
         const m = JSON.parse(ev.data);
+        if (m?.type === "phase") {
+          // Optional: Update a phase indicator
+          // console.log("Phase:", m.value);
+        }
         if (m?.type === "answer") {
           const norm = normalizePayload(m.answer);
-          setMessages((prev) => ([...(Array.isArray(prev) ? prev : []), { role: "assistant", content: norm.md, at: Date.now() }]));
+          setMessages((prev) => {
+            const msgs = Array.isArray(prev) ? [...prev] : [];
+            const last = msgs[msgs.length - 1];
+            if (awaitingAnswer && last && last.role === "assistant") {
+              // Append streaming chunk to existing assistant message
+              last.content = (last.content || "") + norm.md;
+            } else {
+              msgs.push({ role: "assistant", content: norm.md, at: Date.now() });
+            }
+            return msgs;
+          });
           if (norm.flashcards.length) setCards(norm.flashcards);
           if (norm.topic) setTopic(norm.topic);
           else if (norm.md) setTopic((t) => t || deriveTopicFromMarkdown(norm.md));
+        }
+        if (m?.type === "done") {
           setAwaitingAnswer(false);
+          setBusy(false);
           setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }), 0);
+        }
+        if (m?.type === "error") {
+          setAwaitingAnswer(false);
+          setBusy(false);
+          console.error("Chat Error:", m.error);
+          alert(`Error: ${m.error}`); // Simple alert for now
         }
       } catch { }
     };
@@ -249,6 +273,17 @@ export default function Chat() {
     })();
   }, []);
 
+  /* Category Definitions */
+  const CATEGORIES = [
+    { id: "global", name: "General", icon: "🌐" },
+    { id: "accounting", name: "Accounting", icon: "📊" },
+    { id: "marketing", name: "Marketing", icon: "📢" },
+    { id: "strategy", name: "Strategy", icon: "♟️" },
+    { id: "sales", name: "Sales", icon: "🤝" },
+    { id: "legal", name: "Legal", icon: "⚖️" },
+  ];
+  const [categoryId, setCategoryId] = useState(state.categoryId || "global");
+
   const sendFollowup = async (q: string) => {
     const text = q.trim();
     if (!text || busy) return;
@@ -256,7 +291,8 @@ export default function Chat() {
     setAwaitingAnswer(true);
     setBusy(true);
     try {
-      const r = await chatJSON({ q: text, chatId: chatId || undefined });
+      // Pass categoryId to the backend
+      const r = await chatJSON({ q: text, chatId: chatId || undefined, categoryId: categoryId });
       if (r?.chatId && r.chatId !== chatId) setChatId(r.chatId);
     } finally {
       setBusy(false);
@@ -326,6 +362,25 @@ export default function Chat() {
               )}
               <div ref={scrollRef} />
             </div>
+
+            {/* Category Selector (Cards) */}
+            {/* <div className="fixed top-20 right-4 lg:right-96 z-10 flex flex-wrap gap-2 max-w-md justify-end pointer-events-none">
+              <div className="pointer-events-auto flex gap-2 overflow-x-auto pb-2 px-2 max-w-full no-scrollbar">
+                {CATEGORIES.map(cat => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setCategoryId(cat.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all shadow-lg border ${categoryId === cat.id
+                      ? "bg-stone-100 text-stone-900 border-stone-100 scale-105"
+                      : "bg-stone-900/80 text-stone-400 border-stone-700 hover:bg-stone-800 hover:text-stone-200 backdrop-blur-md"
+                      }`}
+                  >
+                    <span>{cat.icon}</span>
+                    <span>{cat.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div> */}
 
             {latestAssistantContent && !awaitingAnswer && (
               <ActionRow

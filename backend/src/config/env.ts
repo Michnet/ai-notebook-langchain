@@ -1,6 +1,35 @@
-import path from 'path'
 
-process.loadEnvFile(path.resolve(process.cwd(), '.env'))
+import path from 'path'
+import fs from 'fs'
+
+// Robust .env loading that works on Node 20+
+// Attempts native loadEnvFile (Node 21+), falls back to manual parsing
+if (typeof process.loadEnvFile === 'function') {
+  try {
+    process.loadEnvFile(path.resolve(process.cwd(), '.env'))
+  } catch (e) {
+    console.warn("Failed to load .env with process.loadEnvFile", e)
+  }
+} else {
+  // Manual fallback
+  const envPath = path.resolve(process.cwd(), '.env');
+  if (fs.existsSync(envPath)) {
+    const raw = fs.readFileSync(envPath, "utf-8");
+    raw.split(/\r?\n/).forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) return;
+      const eqIdx = line.indexOf('=');
+      if (eqIdx > 0) {
+        const key = line.substring(0, eqIdx).trim();
+        let val = line.substring(eqIdx + 1).trim();
+        val = val.replace(/^["'](.+)["']$/, '$1'); // Strip quotes
+        process.env[key] = val;
+      }
+    });
+  } else {
+    console.warn("No .env file found at", envPath);
+  }
+}
 
 export const config = {
   db_mode: process.env.db_mode || 'json',

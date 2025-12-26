@@ -10,6 +10,10 @@ import { debateRoutes } from "./routes/debate";
 import { companionRoutes } from "./routes/companion";
 
 export function registerRoutes(app: any) {
+  app.get('/', (req: any, res: any) => {
+    res.json({ status: 'ok', service: 'ai-notebook-backend', version: '1.0.0' });
+  });
+
   chatRoutes(app);
   quizRoutes(app);
   examRoutes(app);

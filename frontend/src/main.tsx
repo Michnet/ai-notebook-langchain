@@ -10,22 +10,27 @@ import ExamLabs from "./pages/examlab.tsx";
 import NotFound from './pages/404.tsx'
 import PlannerPage from './pages/Planner'
 import Debate from './pages/Debate'
+import AuthPage from './pages/Auth'
+import { AuthProvider } from "./context/AuthContext";
 import "./index.css"
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <BrowserRouter>
-    <Routes>
-      <Route path="/" element={<App />}>
-        <Route path="*" element={<NotFound />} />
-        <Route index element={<Landing />} />
-        <Route path="chat" element={<Chat />} />
-        <Route path="quiz" element={<Quiz />} />
-        <Route path="tools" element={<Tools />} />
-        <Route path="planner" element={<PlannerPage />} />
-        <Route path="debate" element={<Debate />} />
-        <Route path="cards" element={<FlashCards />} />
-        <Route path="exam" element={<ExamLabs />} />
-      </Route>
-    </Routes>
+    <AuthProvider>
+      <Routes>
+        <Route path="/auth" element={<AuthPage />} />
+        <Route path="/" element={<App />}>
+          <Route path="*" element={<NotFound />} />
+          <Route index element={<Landing />} />
+          <Route path="chat" element={<Chat />} />
+          <Route path="quiz" element={<Quiz />} />
+          <Route path="tools" element={<Tools />} />
+          <Route path="planner" element={<PlannerPage />} />
+          <Route path="debate" element={<Debate />} />
+          <Route path="cards" element={<FlashCards />} />
+          <Route path="exam" element={<ExamLabs />} />
+        </Route>
+      </Routes>
+    </AuthProvider>
   </BrowserRouter>
 );

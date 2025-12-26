@@ -1,71 +1,78 @@
-import fs from "fs"
-import path from "path"
-import { Chroma } from "@langchain/community/vectorstores/chroma"
+
+import { SupabaseVectorStore } from "@langchain/community/vectorstores/supabase"
 import { Document } from "@langchain/core/documents"
 import { EmbeddingsInterface } from "@langchain/core/embeddings"
-import { config } from "../../config/env"
+// @ts-ignore
+import { supabase } from "./supabase"
 
-const memoryStores: Record<string, any> = {}
-const retrieverCache: Record<string, any> = {}
+// Simple implementation to avoid import issues
+class SimpleMergerRetriever {
+  retrievers: any[]
+
+  constructor(fields: { retrievers: any[] }) {
+    this.retrievers = fields.retrievers
+  }
+
+  async invoke(query: string) {
+    const results = await Promise.all(this.retrievers.map(r => r.invoke(query)))
+    // flatten
+    const flat = results.flat()
+    // dedupe by content
+    const seen = new Set()
+    return flat.filter(d => {
+      const txt = d.pageContent
+      if (seen.has(txt)) return false
+      seen.add(txt)
+      return true
+    })
+  }
+}
 
 export async function saveDocuments(
   collection: string,
   docs: Document[],
   embeddings: EmbeddingsInterface
 ) {
-  if (config.db_mode === "json") {
-    const file = path.join(process.cwd(), "storage", "json", `${collection}.json`)
-    const dir = path.dirname(file)
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(
-      file,
-      JSON.stringify(
-        docs.map(d => ({
-          pageContent: typeof d.pageContent === "string" ? d.pageContent : String(d.pageContent ?? ""),
-          metadata: d.metadata || {}
-        })),
-        null,
-        2
-      )
-    )
-    delete memoryStores[collection]
-    delete retrieverCache[collection]
-  } else {
-    const store = new Chroma(embeddings, {
-      collectionName: collection,
-      collectionMetadata: { "hnsw:space": "cosine" },
-      url: "http://localhost:8000",
-    })
-    await store.addDocuments(docs)
-    retrieverCache[collection] = store.asRetriever({ k: 4 })
-  }
+  const store = new SupabaseVectorStore(embeddings, {
+    client: supabase,
+    tableName: "documents",
+    queryName: "match_documents",
+  })
+
+  // Add collection name to metadata for filtering
+  const docsWithMeta = docs.map(d => {
+    d.metadata = { ...d.metadata, collection }
+    return d
+  })
+
+  await store.addDocuments(docsWithMeta)
 }
 
 export async function getRetriever(
   collection: string,
   embeddings: EmbeddingsInterface
 ) {
-  if (retrieverCache[collection]) return retrieverCache[collection]
+  const store = new SupabaseVectorStore(embeddings, {
+    client: supabase,
+    tableName: "documents",
+    queryName: "match_documents",
+  })
 
-  if (config.db_mode === "json") {
-    const file = path.join(process.cwd(), "storage", "json", `${collection}.json`)
-    const docsRaw = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf-8")) : []
-    const docs = docsRaw.map((d: any) => new Document({
-      pageContent: typeof d.pageContent === "string" ? d.pageContent : String(d.pageContent ?? ""),
-      metadata: d.metadata || {},
-    }))
-    if (!memoryStores[collection]) {
-      const { MemoryVectorStore } = await import("langchain/vectorstores/memory")
-      memoryStores[collection] = await MemoryVectorStore.fromDocuments(docs, embeddings)
-    }
-    retrieverCache[collection] = memoryStores[collection].asRetriever({ k: 4 })
-    return retrieverCache[collection]
-  } else {
-    const store = new Chroma(embeddings, {
-      collectionName: collection,
-      url: "http://localhost:8000",
-    })
-    retrieverCache[collection] = store.asRetriever({ k: 4 })
-    return retrieverCache[collection]
-  }
+  return store.asRetriever({
+    k: 4,
+    filter: (rpc) => rpc.filter("metadata->>collection", "eq", collection),
+  })
+}
+
+export async function getMultiRetriever(
+  collections: string[],
+  embeddings: EmbeddingsInterface
+) {
+  const retrievers = await Promise.all(
+    collections.map(c => getRetriever(c, embeddings))
+  )
+
+  return new SimpleMergerRetriever({
+    retrievers,
+  })
 }

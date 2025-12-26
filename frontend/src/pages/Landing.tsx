@@ -13,6 +13,7 @@ export default function Landing() {
   const [showLength, setShowLength] = useState(false);
   const [stagedFile, setStagedFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [categoryId, setCategoryId] = useState("global");
 
   const fileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
@@ -48,8 +49,8 @@ export default function Landing() {
         navigate(`/chat?chatId=${encodeURIComponent(chatId)}&q=${encodeURIComponent(q)}`);
         return;
       }
-      const r = await chatJSON({ q });
-      navigate(`/chat?chatId=${encodeURIComponent(r.chatId)}&q=${encodeURIComponent(q)}`);
+      const r = await chatJSON({ q, categoryId });
+      navigate(`/chat?chatId=${encodeURIComponent(r.chatId)}&q=${encodeURIComponent(q)}`, { state: { categoryId } });
     } finally {
       setBusy(false);
     }
@@ -61,6 +62,30 @@ export default function Landing() {
         <h1 className="text-2xl sm:text-3xl lg:text-4xl text-white font-semibold pl-3 border-l-2 border-sky-500 mb-8">
           What&apos;d you like to learn today?
         </h1>
+
+        {/* Category Selector */}
+        {/* <div className="flex flex-wrap gap-2 mb-8 pl-3">
+          {[
+            { id: "global", name: "General", icon: "🌐" },
+            { id: "accounting", name: "Accounting", icon: "📊" },
+            { id: "marketing", name: "Marketing", icon: "📢" },
+            { id: "strategy", name: "Strategy", icon: "♟️" },
+            { id: "sales", name: "Sales", icon: "🤝" },
+            { id: "legal", name: "Legal", icon: "⚖️" },
+          ].map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setCategoryId(cat.id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all shadow-lg border ${categoryId === cat.id
+                ? "bg-stone-100 text-stone-900 border-stone-100 scale-105"
+                : "bg-stone-900/80 text-stone-400 border-stone-700 hover:bg-stone-800 hover:text-stone-200 backdrop-blur-md"
+                }`}
+            >
+              <span>{cat.icon}</span>
+              <span>{cat.name}</span>
+            </button>
+          ))}
+        </div> */}
 
         <PromptBox
           value={prompt}
@@ -177,7 +202,7 @@ export default function Landing() {
         </div>
       </div>
 
-      <ExploreTopics />
+      <ExploreTopics setCategoryId={setCategoryId}/>
 
       <input ref={fileRef} type="file" className="hidden" onChange={onFileChange} />
     </div>

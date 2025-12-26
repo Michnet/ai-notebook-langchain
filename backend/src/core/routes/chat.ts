@@ -57,13 +57,27 @@ export function chatRoutes(app: any) {
       } else {
         q = req.body?.q || "";
         chatId = req.body?.chatId;
+        const categoryId = req.body?.categoryId; // Extract category
+
+        // Construct Namespace: Default to 'global', append category if present
+        // If multiple sources logic is needed, we combine them here:
+        // e.g. "global,category:business"
+        const nsBase = "global";
+        const ns = categoryId && categoryId !== 'global' ? `${nsBase},category:${categoryId}` : nsBase;
+
         if (!q) return res.status(400).send({ error: "q required" });
       }
 
       let chat = chatId ? await getChat(chatId) : undefined;
       if (!chat) chat = await mkChat(q);
       const id = chat.id;
-      const ns = `chat:${id}`;
+      // Note: We use the *chat-specific* namespace for session history storage (backend/src/lib/ai/ask.ts handles this separately via 'nsFinal')
+      // BUT for RAG retrieval, we want to pass the SOURCES namespace.
+      // handleAsk accepts `ns` which is used for RAG search.
+
+      // Let's pass our constructed 'sources namespace' into handleAsk
+      // handleAsk(params.q, params.namespace ...)
+      const retrievalNs = isMp ? (files.length ? `chat:${id}` : "global") : (req.body?.categoryId ? (req.body.categoryId === 'global' ? 'global' : `global,category:${req.body.categoryId}`) : 'global');
 
       res
         .status(202)
@@ -109,7 +123,7 @@ export function chatRoutes(app: any) {
 
           answer = await handleAsk({
             q,
-            namespace: ns,
+            namespace: retrievalNs, // Use the variable from scope
             history: relevantHistory,
           });
 

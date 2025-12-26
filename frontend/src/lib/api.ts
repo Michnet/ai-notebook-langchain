@@ -5,7 +5,7 @@ export type ChatMessage = { role: "user" | "assistant"; content: string; at: num
 export type ChatInfo = { id: string; title?: string; createdAt?: number };
 export type ChatsList = { ok: true; chats: ChatInfo[] };
 export type ChatDetail = { ok: true; chat: ChatInfo; messages: ChatMessage[] };
-export type ChatJSONBody = { q: string; chatId?: string };
+export type ChatJSONBody = { q: string; chatId?: string; categoryId?: string };
 export type ChatPhase = "upload_start" | "upload_done" | "generating";
 export type FlashCard = { q: string; a: string; tags?: string[] };
 export type Question = { id: number; question: string; options: string[]; correct: number; hint: string; explanation: string; imageHtml?: string; };
@@ -84,14 +84,24 @@ const timeoutCtl = (ms: number) => {
   return { signal: c.signal, done: () => clearTimeout(t) };
 };
 
+import { supabase } from "./supabaseClient";
+
 async function req<T = unknown>(
   url: string,
   init: RequestInit & { timeout?: number } = {}
 ): O<T> {
   const { timeout = env.timeout, ...rest } = init;
   const { signal, done } = timeoutCtl(timeout);
+
+  // Inject Auth Header
+  const { data: { session } } = await supabase.auth.getSession();
+  const headers = new Headers(rest.headers || {});
+  if (session?.access_token) {
+    headers.set("Authorization", `Bearer ${session.access_token}`);
+  }
+
   try {
-    const r = await fetch(url, { signal, ...rest });
+    const r = await fetch(url, { signal, ...rest, headers });
     if (!r.ok) {
       const txt = await r.text().catch(() => "");
       throw new Error(`http ${r.status}: ${txt || r.statusText}`);

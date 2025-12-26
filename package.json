@@ -24,6 +24,7 @@
     "@langchain/ollama": "^0.2.4",
     "@langchain/openai": "^0.6.12",
     "@pdf-lib/fontkit": "^1.1.1",
+    "@supabase/supabase-js": "^2.89.0",
     "busboy": "^1.6.0",
     "cors": "^2.8.5",
     "d3-force": "^3.0.0",
